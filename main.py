@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify, flash, session, redirect, url_for, render_template
 from flask_httpauth import HTTPBasicAuth
-import re, json
+import re, json,jwt,datetime
 from urllib.parse import unquote
-
+from functools import wraps
 from pymongo import MongoClient
 
 client = MongoClient('localhost', 27017)
@@ -12,19 +12,39 @@ session_counter = 0
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
-app.secret_key = "secret"
+app.config['SECRET_KEY'] = "secret"
 
 User_DATA = db.user.find({}, {"_id": 0})[0]
 
+def token_required(f):
+    @wraps(f)
+    def decorated(*args,**kwargs):
+        token = None
+        if 'token' in session:
+            token = session['token']
+        if not  token:
+            return render_template("login.html")
+        try:
+            data = jwt.decode(token,app.config['SECRET_KEY'])
+            # current_user =  db.user.find({"username":data['username']}, {"_id": 0})[0]
+            current_user = data['username']
+        except:
+            return  render_template("login.html")
+        return f(current_user,*args,**kwargs)
+    return decorated
 
 @app.route('/add_data', methods=["GET", "POST"])
-def add_data():
+@token_required
+def add_data(current_user):
+
     if request.method == 'GET' and len(session) > 0:
 
         if session['username'] == User_DATA['username']:
             return render_template('add_data.html')
 
     if request.method == 'POST' and len(session) > 0:
+        if current_user != 'admin':
+            return jsonify({'message':'cannot perform that function!'})
 
         if session['username'] == User_DATA['username']:
             temp_var = request.get_data()
@@ -66,13 +86,16 @@ def add_data():
 
 
 @app.route("/delete", methods=["POST", "GET"])
-def movie_delete():
+@token_required
+def movie_delete(current_user):
     if request.method == 'GET' and len(session) > 0:
 
         if session['username'] == User_DATA['username']:
             return render_template('del.html')
 
     if request.method == 'POST' and len(session) > 0:
+        if current_user != 'admin':
+            return jsonify({'message':'cannot perform that function!'})
 
         if session['username'] == User_DATA['username']:
             temp_var = request.get_data()
@@ -111,14 +134,9 @@ def my_home():
     return jsonify(datavalue["data"])
 
 
-@app.route('/landing')
-def landing():
-    return "<br><a href = '/home'>" + "click here for Homepage</a>&nbsp;&nbsp;&nbsp;" + \
-           "<a href = '/add_data'>" + "click here to add data</a>&nbsp;&nbsp;&nbsp;" + \
-           "<a href = '/delete'>" + "click here to delete data</a>&nbsp;&nbsp;&nbsp;" + \
-           "<a href = '/search_by_name'>" + "click here to Search with movie name </a>&nbsp;&nbsp;&nbsp;" + \
-           "<a href = '/search_by_genre'>" + "click here to Search with genre </a>&nbsp;&nbsp;&nbsp;"+\
-            "<a href = '/edit'>" + "click here to Edit data  </a>&nbsp;&nbsp;&nbsp;"
+@app.route('/index')
+def index():
+    return render_template('index.html')
 
 
 
@@ -141,11 +159,35 @@ def search_by_name():
             return jsonify(datavalue)
         else:
             return "Record Not Found"
+@app.route('/search_by_genre', methods=['GET', "POST"])
+def search_by_genre():
+    if request.method == 'GET':
+        return render_template("search_genre.html")
+    if request.method == 'POST':
+        print(request.method)
+        temp_var = request.get_data()
+        temp_var = temp_var.decode('utf-8')
+        temp_var = temp_var.split("=")[-1]
+        genre_name = temp_var
+
+        datavalue = {}
+        datavalue["data"] = []
+        cursor = db.movies.find({"genre": re.compile(genre_name, re.IGNORECASE)}, {"_id": 0})
+
+        datavalue["data"] = [record for record in cursor]
+        if datavalue["data"] != []:
+            return jsonify(datavalue)
+        else:
+            return "Record Not Found"
+
 
 @app.route('/edit1', methods=[ "POST"])
-def edit1():
+@token_required
+def edit1(current_user):
 
     if request.method == 'POST':
+        if current_user != 'admin':
+            return jsonify({'message':'cannot perform that function!'})
         if len(session) > 0 and session['username'] == User_DATA['username']:
             temp_var = request.get_data()
             temp_var = temp_var.decode('utf-8')
@@ -179,7 +221,8 @@ def edit1():
 
 
 @app.route('/edit', methods=['GET', "POST"])
-def edit():
+@token_required
+def edit(current_user):
     # search_by_genre/?option="War"
     if request.method == 'GET':
         if len(session) > 0 and session['username'] == User_DATA['username']:
@@ -187,6 +230,9 @@ def edit():
             return render_template("edit1.html")
         else: return redirect(url_for('login'))
     if request.method == 'POST':
+        if current_user != 'admin':
+            return jsonify({'message':'cannot perform that function!'})
+
         if len(session) > 0 and session['username'] == User_DATA['username']:
             temp_var = request.get_data()
             temp_var = temp_var.decode('utf-8')
@@ -211,13 +257,6 @@ def edit():
 
 
 
-# @app.route('/index')
-# def index():
-#    if 'username' in session:
-#
-#       username = session['username']
-#       return 'Logged in as ' + username + '<br>' + "<b><a href = '/logout'>click here to log out</a></b>"
-#    return "You are not logged in <br><a href = '/login'>" + "click here to log in</a>"
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -234,16 +273,19 @@ def login():
 
             session['username'] = request.form['username']
             session['password'] = request.form['password']
+            token = jwt.encode({'username':'admin','exp':datetime.datetime.utcnow()+datetime.timedelta(minutes=5)},app.config['SECRET_KEY'])
+            session['token'] = token.decode('UTF-8')
+            print(session["token"])
 
-            return redirect(url_for('landing'))
+            return redirect(url_for('index'))
     return render_template("login.html")
 
 
 @app.route('/logout')
 def logout():
     # remove the username from the session if it is there
-    session.pop("username", None)
-    session.pop("password", None)
+    print(session)
+    session.clear()
 
     return redirect(url_for('login'))
 
