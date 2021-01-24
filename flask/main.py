@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, flash, session, redirect, url_for, render_template
 from flask_httpauth import HTTPBasicAuth
-import re, json,jwt,datetime
+import re, json, jwt, datetime
 from urllib.parse import unquote
 from functools import wraps
 from pymongo import MongoClient
@@ -17,27 +17,29 @@ app.config['SECRET_KEY'] = "8aacf358ee03b9e906455587c9538669"
 
 User_DATA = db.user.find({}, {"_id": 0})[0]
 
+
 def token_required(f):
     @wraps(f)
-    def decorated(*args,**kwargs):
+    def decorated(*args, **kwargs):
         token = None
         if 'token' in session:
             token = session['token']
-        if not  token:
+        if not token:
             return render_template("login.html")
         try:
-            data = jwt.decode(token,app.config['SECRET_KEY'])
+            data = jwt.decode(token, app.config['SECRET_KEY'])
             # current_user =  db.user.find({"username":data['username']}, {"_id": 0})[0]
             current_user = data['username']
         except:
-            return  render_template("login.html")
-        return f(current_user,*args,**kwargs)
+            return render_template("login.html")
+        return f(current_user, *args, **kwargs)
+
     return decorated
+
 
 @app.route('/add_data', methods=["GET", "POST"])
 @token_required
 def add_data(current_user):
-
     if request.method == 'GET' and len(session) > 0:
 
         if session['username'] == User_DATA['username']:
@@ -45,7 +47,7 @@ def add_data(current_user):
 
     if request.method == 'POST' and len(session) > 0:
         if current_user != 'admin':
-            return jsonify({'message':'cannot perform that function!'})
+            return jsonify({'message': 'cannot perform that function!'})
 
         if session['username'] == User_DATA['username']:
             temp_var = request.get_data()
@@ -96,7 +98,7 @@ def movie_delete(current_user):
 
     if request.method == 'POST' and len(session) > 0:
         if current_user != 'admin':
-            return jsonify({'message':'cannot perform that function!'})
+            return jsonify({'message': 'cannot perform that function!'})
 
         if session['username'] == User_DATA['username']:
             temp_var = request.get_data()
@@ -116,7 +118,7 @@ def movie_delete(current_user):
         return render_template("login.html")
 
 
-@app.route('/home',methods=['GET'])
+@app.route('/home', methods=['GET'])
 def my_home():
     # print(request.authorization.username)
 
@@ -133,15 +135,12 @@ def my_home():
 
     datavalue["data"] = [record for record in cursor]
 
-
-
     return jsonify(datavalue)
 
 
 @app.route('/index')
 def index():
     return render_template('index.html')
-
 
 
 @app.route('/search_by_name', methods=['GET', "POST"])
@@ -156,13 +155,14 @@ def search_by_name():
         movie_name = temp_var
         datavalue = {}
         datavalue["data"] = []
-        cursor = db.movies.find({"name": movie_name}, {"_id": 0})
+        cursor = db.movies.find({"name": re.compile(movie_name, re.IGNORECASE)}, {"_id": 0})
 
         datavalue["data"] = [record for record in cursor]
         if datavalue["data"] != []:
             return jsonify(datavalue)
         else:
             return "Record Not Found"
+
 
 @app.route('/search_by_genre', methods=['GET', "POST"])
 def search_by_genre():
@@ -186,13 +186,12 @@ def search_by_genre():
             return "Record Not Found"
 
 
-@app.route('/edit1', methods=[ "POST"])
+@app.route('/edit1', methods=["POST"])
 @token_required
 def edit1(current_user):
-
     if request.method == 'POST':
         if current_user != 'admin':
-            return jsonify({'message':'cannot perform that function!'})
+            return jsonify({'message': 'cannot perform that function!'})
         if len(session) > 0 and session['username'] == User_DATA['username']:
             temp_var = request.get_data()
             temp_var = temp_var.decode('utf-8')
@@ -200,13 +199,15 @@ def edit1(current_user):
 
             popular = float(unquote(temp_list[0].split("=")[-1]))
 
-            director = str(unquote(temp_list[1].split("=")[-1])).replace("+"," ")
+            director = str(unquote(temp_list[1].split("=")[-1])).replace("+", " ")
 
-            genre = ("".join(str(unquote(temp_list[2])).split("=")[-1]).strip()).replace('"', '').replace("'",'').replace("+"," ").replace("[","").replace("]","").split(",")
+            genre = ("".join(str(unquote(temp_list[2])).split("=")[-1]).strip()).replace('"', '').replace("'",
+                                                                                                          '').replace(
+                "+", " ").replace("[", "").replace("]", "").split(",")
 
             imdb_score = float(str(unquote(temp_list[3]).split("=")[-1]))
 
-            name = str(str(unquote(temp_list[4]).split("=")[-1]).replace('"', '')).replace("'",'').replace("+"," ")
+            name = str(str(unquote(temp_list[4]).split("=")[-1]).replace('"', '')).replace("'", '').replace("+", " ")
 
             data_on = {
                 "99popularity": popular,
@@ -216,27 +217,35 @@ def edit1(current_user):
                 "name": name
             }
             newvalues = {"$set": data_on}
-            db.movies.update_one({"name":name}, newvalues)
-            flash("Update success ","success")
+            db.movies.update_one({"name": name}, newvalues)
+            flash("Update success ", "success")
             return redirect(url_for("edit"))
         else:
             return redirect(url_for('login'))
 
 
-
-
 @app.route('/edit', methods=['GET', "POST"])
 @token_required
 def edit(current_user):
-    # search_by_genre/?option="War"
+    """
+
+
+    sevice to add form values upfront, so that users can edit the data
+
+    redirect: edit.html
+    response: json of requested movie to get prefilled in the form
+
+    """
+
     if request.method == 'GET':
         if len(session) > 0 and session['username'] == User_DATA['username']:
 
             return render_template("edit1.html")
-        else: return redirect(url_for('login'))
+        else:
+            return redirect(url_for('login'))
     if request.method == 'POST':
         if current_user != 'admin':
-            return jsonify({'message':'cannot perform that function!'})
+            return jsonify({'message': 'cannot perform that function!'})
 
         if len(session) > 0 and session['username'] == User_DATA['username']:
             temp_var = request.get_data()
@@ -246,20 +255,20 @@ def edit(current_user):
 
             datavalue = {}
             datavalue["data"] = []
-            cursor = db.movies.find({"name": movie_name}, {"_id": 0})
+            cursor = db.movies.find({"name": re.compile(movie_name, re.IGNORECASE)}, {"_id": 0})
 
             datavalue["data"] = [record for record in cursor]
 
             if datavalue["data"] != []:
-                print(datavalue)
+                # print(datavalue)
                 datavalue = datavalue['data'][0]
-                print(datavalue)
-                return render_template("edit.html",popu=datavalue["99popularity"],dir=datavalue['director'],gen=datavalue['genre'],score=datavalue["imdb_score"],name=datavalue['name'])
+                # print(datavalue)
+                return render_template("edit.html", popu=datavalue["99popularity"], dir=datavalue['director'],
+                                       gen=datavalue['genre'], score=datavalue["imdb_score"], name=datavalue['name'])
             else:
                 return "Record Not Found"
         else:
             return redirect(url_for('login'))
-
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -276,7 +285,8 @@ def login():
 
             session['username'] = request.form['username']
             session['password'] = request.form['password']
-            token = jwt.encode({'username':'admin','exp':datetime.datetime.utcnow()+datetime.timedelta(minutes=5)},app.config['SECRET_KEY'])
+            token = jwt.encode({'username': 'admin', 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=5)},
+                               app.config['SECRET_KEY'])
             session['token'] = token.decode('UTF-8')
             print(session["token"])
 
