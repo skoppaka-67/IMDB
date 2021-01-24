@@ -4,6 +4,7 @@ import re, json,jwt,datetime
 from urllib.parse import unquote
 from functools import wraps
 from pymongo import MongoClient
+import pymongo
 
 client = MongoClient('localhost', 27017)
 db = client['MDB']
@@ -115,23 +116,26 @@ def movie_delete(current_user):
         return render_template("login.html")
 
 
-@app.route('/home')
+@app.route('/home',methods=['GET'])
 def my_home():
     # print(request.authorization.username)
-    # # print(request.authorization.password)
-    # username= print(session["username"])
-    # if request.authorization and request.authorization.username =='username' and request.authorization.password == 'password':
-    #     return "secure login"
-    # else:
-    #     return make_response('could not verify!',401,{'www-Authenticate':'Basic realm="Login Required"'})
 
     datavalue = {}
-    datavalue["data"] = []
-    cursor = db.movies.find({}, {"_id": 0})
+    limit = int(request.args['limit'])
+    offset = int(request.args['offset'])  # final record index
+    starting_id = db.movies.find().sort('_id', pymongo.ASCENDING)
+    last_id = starting_id[offset]['_id']  # final record _id
+
+    datavalue["next_url"] = '/home' + '?limit=' + str(limit) + '&offset=' + str(offset + limit)
+    datavalue["prev_url"] = '/home' + '?limit=' + str(limit) + '&offset=' + str(offset - limit)
+
+    cursor = db.movies.find({'_id': {'$gt': last_id}}, {"_id": 0}).sort('_id', pymongo.ASCENDING).limit(limit)
 
     datavalue["data"] = [record for record in cursor]
 
-    return jsonify(datavalue["data"])
+
+
+    return jsonify(datavalue)
 
 
 @app.route('/index')
