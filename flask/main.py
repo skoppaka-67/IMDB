@@ -7,14 +7,14 @@ from pymongo import MongoClient
 import pymongo
 
 #client = MongoClient('13.233.230.164', 27017)
-client = MongoClient('mongodb://kiran:kiranaws@13.233.230.164:27017/')
+client = MongoClient('mongodb://uname:password@13.233.230.164:27017/')
 db = client['MDB']
 
 session_counter = 0
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
-app.config['SECRET_KEY'] = "secret"
+app.config['SECRET_KEY'] = "8aacf358ee03b9e906455587c9538669"
 
 User_DATA = db.user.find({}, {"_id": 0})[0]
 
