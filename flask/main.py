@@ -13,7 +13,7 @@ session_counter = 0
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
-app.config['SECRET_KEY'] = "secret"
+app.config['SECRET_KEY'] = "8aacf358ee03b9e906455587c9538669"
 
 User_DATA = db.user.find({}, {"_id": 0})[0]
 
@@ -163,6 +163,7 @@ def search_by_name():
             return jsonify(datavalue)
         else:
             return "Record Not Found"
+
 @app.route('/search_by_genre', methods=['GET', "POST"])
 def search_by_genre():
     if request.method == 'GET':
@@ -258,8 +259,6 @@ def edit(current_user):
                 return "Record Not Found"
         else:
             return redirect(url_for('login'))
-
-
 
 
 
