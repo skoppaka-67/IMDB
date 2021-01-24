@@ -5,15 +5,19 @@
  
  # Authorization
  
+  Used Json Web Tokens to authorize the user
+ 
  
  
  # Authentication 
  
+ Used HTTPBasicAuth for  user Authanticaion
+ 
  
  # Requirements
    Python 3.6
-   
    Flask
+   MongoDB
 
 # Create virtual environment and activate it
   virtualenv -p python3 env
@@ -47,6 +51,8 @@
  Search movies with genre
  http://13.233.230.164:5001/search_by_genre
  
+# Deployment 
+ 
+ Application is dockerized and deployed in Aws
+ 
 
-#port
-5001
